@@ -226,8 +226,31 @@ async function retrieveRelevantNodes() {
     const relevantNodeIds: string[] = parsed.relevantNodeIds || [];
     console.log("Relevant Node IDs:", relevantNodeIds);
 }
-retrieveRelevantNodes();
+// retrieveRelevantNodes();
 
 const relevantIds = ["0021", "0016", "0010"];
 
+async function findNodes(nodeIds: string[], nodes: Node[]) {
+    let foundNodesData: FoundNodeData[] = [];
 
+    nodes.forEach((node) => {
+        if (nodeIds.includes(node.nodeId)) {
+            const data = sampleData.slice(node.stringSubset[0], node.stringSubset[1]);
+            foundNodesData.push({
+                nodeId: node.nodeId,
+                title: node.title,
+                summary: node.summary,
+                data,
+            });
+        }
+        if (node.nodes?.length) {
+            findNodes(nodeIds, node.nodes);
+        }
+    });
+
+    console.log("Found Nodes Data:", foundNodesData);
+}
+
+let treeData: string = await fs.readFile("tree.json", "utf-8");
+const treeDataParsed: Node[] = JSON.parse(treeData);
+findNodes(relevantIds, treeDataParsed);
