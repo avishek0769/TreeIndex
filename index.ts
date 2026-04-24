@@ -1,17 +1,201 @@
+import "dotenv/config";
 import OpenAI from "openai";
-import { sampleData } from "./sample_data"
+import { sampleData } from "./sample_data.ts";
+import type Node from "./types.ts";
 
 const openai = new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
-    apiKey: process.env.OPENROUTER_KEY
-})
+    apiKey: process.env.OPENROUTER_KEY,
+});
 
 const SYSTEM_PROMPT = `
+You are an expert knowledge architect.
 
-`
+Build a semantic TREE of knowledge from large text.
 
-async function generateKnowledgeTree () {
-    
+Understand ideas, not chapters or positions.
+
+Create nodes only for meaningful concepts, principles, processes, mechanisms, entities, or themes.
+
+Good nodes:
+- Assets vs Liabilities
+- Cash Flow Thinking
+- Corporate Tax Advantages
+- Fear of Loss
+- Investing Principles
+
+Bad nodes:
+- Chapter 1
+- Section 2
+- Middle Part
+- Final Pages
+
+Input:
+1. PREVIOUS_TREE
+2. NEW_TEXT_CHUNK
+3. CHUNK_START_INDEX
+
+The first character of NEW_TEXT_CHUNK equals CHUNK_START_INDEX in the original text.
+
+Use PREVIOUS_TREE to:
+- detect existing concepts
+- avoid duplicates
+- continue hierarchy
+- continue nodeId numbering
+
+NodeId rules:
+- Find highest existing nodeId in PREVIOUS_TREE
+- Start new ids from next number
+- Never reuse ids
+- Never reset ids
+- Zero padded numeric strings
+
+Your job:
+- Read NEW_TEXT_CHUNK
+- Detect important concepts
+- Merge repeated ideas with existing concepts
+- Create only new nodes or improved nodes
+- Return only delta nodes, never full tree
+
+Hierarchy:
+- Parent = broad topic
+- Child = narrower subtopic
+
+Rules:
+1. Do not create nodes from chapter names.
+2. Do not split by equal ranges.
+3. Prefer fewer strong nodes.
+4. Summary must contain useful meaning.
+5. Every node must help future retrieval.
+6. stringSubset must be absolute indices.
+7. If nothing valuable is new, return {"nodes":[]}
+
+Node format:
+{
+  "nodeId": "0015",
+  "title": "Fear of Loss",
+  "summary": "Explains how fear of losing money prevents action, learning, and long-term investing decisions.",
+  "stringSubset": [62000, 64500],
+  "nodes": []
 }
 
-generateKnowledgeTree()
+Title:
+- max 8 words
+- concept focused
+
+Summary:
+- concise but meaningful
+- explain lesson, mechanism, or principle
+- no filler
+
+CRITICAL OUTPUT RULES:
+
+Return ONLY valid JSON.
+Return ONLY one raw JSON object.
+No markdown.
+No code fences.
+No explanation.
+No notes.
+No thinking.
+No intro text.
+No trailing text.
+No comments.
+No natural language before JSON.
+No natural language after JSON.
+
+If you cannot comply, still output exactly:
+{"nodes":[]}
+
+Required output shape only:
+
+{
+  "nodes": [...]
+}
+`;
+
+let tree: Node[] = [];
+
+function mergeNodes(target: any[], incoming: any[]) {
+    for (const node of incoming) {
+        const existing = target.find((n) => n.title === node.title);
+
+        if (!existing) {
+            target.push(node);
+            continue;
+        }
+
+        // update summary if better
+        if (node.summary && node.summary.length > (existing.summary?.length || 0)) {
+            existing.summary = node.summary;
+        }
+
+        // widen string range
+        existing.stringSubset = [
+            Math.min(existing.stringSubset[0], node.stringSubset[0]),
+            Math.max(existing.stringSubset[1], node.stringSubset[1]),
+        ];
+
+        existing.nodes = existing.nodes || [];
+        mergeNodes(existing.nodes, node.nodes || []);
+    }
+}
+
+function getMaxCoveredIndex(nodes: Node[]): number {
+    let max = 0;
+
+    for (const node of nodes) {
+        if (node.stringSubset?.[1] > max) {
+            max = node.stringSubset[1];
+        }
+
+        if (node.nodes?.length) {
+            const childMax = getMaxCoveredIndex(node.nodes);
+            if (childMax > max) max = childMax;
+        }
+    }
+
+    return max;
+}
+
+async function generateKnowledgeTree(data: string, startSubset: number) {
+    if (data.length < 100) return;
+    // console.log("Start --> ", startSubset)
+
+    const completion = await openai.chat.completions.create({
+        model: "inclusionai/ling-2.6-flash:free",
+        messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: `PREVIOUS_TREE: \n ${JSON.stringify(tree)} CHUNK_START_INDEX: ${startSubset}` },
+            { role: "user", content: `NEW_TEXT_CHUNK: ${data}` },
+        ],
+    });
+
+    const raw = completion.choices?.[0]?.message?.content || '{"nodes":[]}';
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
+    } catch (err) {
+        console.log("Invalid JSON:", raw);
+        return;
+    }
+    const newNodes: Node[] = parsed.nodes || [];
+
+    if (!newNodes.length) return;
+
+    mergeNodes(tree, newNodes);
+    // console.log("New TREE:", newNodes, "\n");
+
+    const lastNode = newNodes[newNodes.length - 1];
+
+    const maxCovered = getMaxCoveredIndex(tree);
+    if (maxCovered <= startSubset) return;
+
+    const nextStart = Math.max(0, maxCovered - 400);
+    const nextChunk = sampleData.slice(nextStart);
+
+    await generateKnowledgeTree(nextChunk, lastNode.stringSubset[1]);
+}
+
+await generateKnowledgeTree(sampleData, 0);
+
+console.log(tree)
