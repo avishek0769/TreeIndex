@@ -1,13 +1,8 @@
 import "dotenv/config";
 import OpenAI from "openai";
 import { sampleData } from "./sample_data.ts";
-import type { Node } from "./types.ts";
+import type { Node, ProviderEnum } from "./types.ts";
 import fs from "fs/promises";
-
-const openai = new OpenAI({
-    baseURL: "https://openrouter.ai/api/v1",
-    apiKey: process.env.OPENROUTER_KEY,
-});
 
 const SYSTEM_PROMPT = `
 You are an expert knowledge architect.
@@ -114,163 +109,169 @@ Required output shape only:
 }
 `;
 
-let tree: Node[] = [];
-
-function mergeNodes(target: any[], incoming: any[]) {
-    for (const node of incoming) {
-        const existing = target.find((n) => n.title === node.title);
-
-        if (!existing) {
-            target.push(node);
-            continue;
-        }
-
-        // update summary if better
-        if (node.summary && node.summary.length > (existing.summary?.length || 0)) {
-            existing.summary = node.summary;
-        }
-
-        // widen string range
-        existing.stringSubset = [
-            Math.min(existing.stringSubset[0], node.stringSubset[0]),
-            Math.max(existing.stringSubset[1], node.stringSubset[1]),
-        ];
-
-        existing.nodes = existing.nodes || [];
-        mergeNodes(existing.nodes, node.nodes || []);
-    }
+const BASE_URLs = {
+    openai: "https://openai.com/api",
+    gemini: "https://gemini.com/api",
+    anthropic: "https://anthropic.com/api",
+    grok: "https://grok.com/api",
+    ollama: "https://ollama.com/api",
+    openrouter: "https://openrouter.com/api",
 }
 
-function getMaxCoveredIndex(nodes: Node[]): number {
-    let max = 0;
+class TreeIndex {
+    private tree: Node[] = [];
+    private openai: OpenAI;
+    private model: string = "inclusionai/ling-2.6-flash:free";
 
-    for (const node of nodes) {
-        if (node.stringSubset?.[1] > max) {
-            max = node.stringSubset[1];
-        }
-
-        if (node.nodes?.length) {
-            const childMax = getMaxCoveredIndex(node.nodes);
-            if (childMax > max) max = childMax;
-        }
+    constructor(provider: ProviderEnum) {
+        this.openai = new OpenAI({
+            baseURL: BASE_URLs[provider],
+            apiKey: process.env.TREEINDEX_API_KEY,
+        });
     }
 
-    return max;
-}
+    private mergeNodes(target: Node[], incoming: Node[]) {
+        for (const node of incoming) {
+            const existing = target.find((n) => n.title === node.title);
 
-async function generateKnowledgeTree(data: string, startSubset: number) {
-    if (data.length < 100) return;
-    // console.log("Start --> ", startSubset)
+            if (!existing) {
+                target.push(node);
+                continue;
+            }
 
-    const completion = await openai.chat.completions.create({
-        model: "inclusionai/ling-2.6-flash:free",
-        messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: `PREVIOUS_TREE: \n ${JSON.stringify(tree)} CHUNK_START_INDEX: ${startSubset}` },
-            { role: "user", content: `NEW_TEXT_CHUNK: ${data}` },
-        ],
-    });
+            if (node.summary && node.summary.length > (existing.summary?.length || 0)) {
+                existing.summary = node.summary;
+            }
 
-    let raw = completion.choices?.[0]?.message?.content || '{"nodes":[]}';
-    let parsed;
-    try {
-        parsed = JSON.parse(raw);
-    } catch (err) {
-        console.log("Invalid JSON:", raw);
-        return;
-    }
-    const newNodes: Node[] = parsed.nodes || [];
+            existing.stringSubset = [
+                Math.min(existing.stringSubset[0], node.stringSubset[0]),
+                Math.max(existing.stringSubset[1], node.stringSubset[1]),
+            ];
 
-    if (!newNodes.length) return;
-
-    mergeNodes(tree, newNodes);
-    // console.log("New TREE:", newNodes, "\n");
-
-    const lastNode = newNodes[newNodes.length - 1];
-
-    const maxCovered = getMaxCoveredIndex(tree);
-    if (maxCovered <= startSubset) return;
-
-    const nextStart = Math.max(0, maxCovered - 400);
-    const nextChunk = sampleData.slice(nextStart);
-
-    await generateKnowledgeTree(nextChunk, lastNode.stringSubset[1]);
-}
-
-// await generateKnowledgeTree(sampleData, 0);
-// await fs.writeFile("tree.json", JSON.stringify(tree))
-
-async function retrieveRelevantNodes(): Promise<string[]> {
-    const treeData = await fs.readFile("tree.json", "utf-8");
-    const query = "What are the main reasons fear of loss prevents investing?";
-
-    const completion = await openai.chat.completions.create({
-        model: "inclusionai/ling-2.6-flash:free",
-        messages: [
-            {
-                role: "system",
-                content: `You are an expert knowledge retriever. You have a hierarchical tree of knowledge nodes with titles, summaries, and string subsets. When given a query, you find the most relevant nodes based on their titles and summaries. You return a list of nodeIds that are most relevant to the query. Always return valid JSON in the format: {"relevantNodeIds": ["0015", "0023"]}`,
-            },
-            { role: "user", content: `QUERY: ${query} KNOWLEDGE_TREE: ${treeData}` },
-        ],
-    });
-
-    let raw = completion.choices?.[0]?.message?.content || '{"relevantNodeIds":[]}';
-    let parsed;
-    try {
-        parsed = JSON.parse(raw);
-    } catch (err) {
-        console.log("Invalid JSON:", raw);
-        return [];
-    }
-    const relevantNodeIds: string[] = parsed.relevantNodeIds || [];
-    console.log("Relevant Node IDs:", relevantNodeIds);
-    return relevantNodeIds;
-}
-// retrieveRelevantNodes();
-
-const relevantIds = ["0021", "0016", "0010"];
-
-async function findNodes(nodeIds: string[], nodes: Node[]): Promise<string> {
-    let foundNodesData: string = "";
-
-    nodes.forEach((node) => {
-        if (nodeIds.includes(node.nodeId)) {
-            const data = sampleData.slice(node.stringSubset[0], node.stringSubset[1]);
-            foundNodesData += data + "\n";
+            existing.nodes = existing.nodes || [];
+            this.mergeNodes(existing.nodes, node.nodes || []);
         }
-        if (node.nodes?.length) {
-            findNodes(nodeIds, node.nodes);
+    }
+
+    private getMaxCoveredIndex(tree: Node[]): number {
+        let max = 0;
+
+        for (const node of tree) {
+            if (node.stringSubset?.[1] > max) {
+                max = node.stringSubset[1];
+            }
+
+            if (node.nodes?.length) {
+                const childMax = this.getMaxCoveredIndex(node.nodes);
+                if (childMax > max) max = childMax;
+            }
         }
-    });
 
-    return foundNodesData;
+        return max;
+    }
+
+    async generateTree(data: string, startSubset: number): Promise<Node[]> {
+        if (data.length < 100) return this.tree;
+
+        const completion = await this.openai.chat.completions.create({
+            model: "inclusionai/ling-2.6-flash:free",
+            messages: [
+                { role: "system", content: SYSTEM_PROMPT },
+                {
+                    role: "user",
+                    content: `PREVIOUS_TREE: \n ${JSON.stringify(this.tree)} CHUNK_START_INDEX: ${startSubset}`,
+                },
+                { role: "user", content: `NEW_TEXT_CHUNK: ${data}` },
+            ],
+        });
+
+        let raw = completion.choices?.[0]?.message?.content || '{"nodes":[]}';
+        let parsed;
+        try {
+            parsed = JSON.parse(raw);
+        } catch (err) {
+            console.log("Invalid JSON:", raw);
+            return [];
+        }
+        const newNodes: Node[] = parsed.nodes || [];
+
+        if (!newNodes.length) return [];
+
+        this.mergeNodes(this.tree, newNodes);
+
+        const lastNode = newNodes[newNodes.length - 1];
+
+        const maxCovered = this.getMaxCoveredIndex(this.tree);
+        if (maxCovered <= startSubset) return [];
+
+        const nextStart = Math.max(0, maxCovered - 400);
+        const nextChunk = sampleData.slice(nextStart);
+
+        await this.generateTree(nextChunk, lastNode.stringSubset[1]);
+        return this.tree;
+    }
+
+    async retrieveRelevantNodes(tree: Node[]): Promise<string[]> {
+        const query = "What are the main reasons fear of loss prevents investing?";
+
+        const completion = await this.openai.chat.completions.create({
+            model: this.model,
+            messages: [
+                {
+                    role: "system",
+                    content: `You are an expert knowledge retriever. You have a hierarchical tree of knowledge nodes with titles, summaries, and string subsets. When given a query, you find the most relevant nodes based on their titles and summaries. You return a list of nodeIds that are most relevant to the query. Always return valid JSON in the format: {"relevantNodeIds": ["0015", "0023"]}`,
+                },
+                { role: "user", content: `QUERY: ${query} KNOWLEDGE_TREE: ${JSON.stringify(tree)}` },
+            ],
+        });
+
+        let raw = completion.choices?.[0]?.message?.content || `{"relevantNodeIds":[]}`;
+        let parsed;
+        try {
+            parsed = JSON.parse(raw);
+        } catch (err) {
+            console.log("Invalid JSON:", raw);
+            return [];
+        }
+        const relevantNodeIds: string[] = parsed.relevantNodeIds || [];
+        console.log("Relevant Node IDs:", relevantNodeIds);
+        return relevantNodeIds;
+    }
+
+    async findNodes(nodeIds: string[], nodes: Node[]): Promise<string> {
+        let foundNodesData: string = "";
+
+        nodes.forEach((node) => {
+            if (nodeIds.includes(node.nodeId)) {
+                const data = sampleData.slice(node.stringSubset[0], node.stringSubset[1]);
+                foundNodesData += data + "\n";
+            }
+            if (node.nodes?.length) {
+                this.findNodes(nodeIds, node.nodes);
+            }
+        });
+
+        return foundNodesData;
+    }
+
+    async completionWithRetrievedNodes(tree: Node[]): Promise<string> {
+        const relevantNodeIds = await this.retrieveRelevantNodes(tree);
+
+        const foundNodesData = await this.findNodes(relevantNodeIds, tree);
+        const query = "What are the main reasons fear of loss prevents investing?";
+
+        const completion = await this.openai.chat.completions.create({
+            model: this.model,
+            messages: [
+                {
+                    role: "system",
+                    content: `You are an expert analyst. You have retrieved relevant knowledge nodes with their data based on a query. Analyze the data from these nodes to answer the query as best as possible.
+                    QUERY: ${query} RETRIEVED_NODES_DATA: ${foundNodesData} Provide a concise and informative answer based on the retrieved data.`,
+                },
+            ],
+        });
+
+        const answer = completion.choices?.[0]?.message?.content || "No answer generated.";
+        return answer;
+    }
 }
-
-// let treeData: string = await fs.readFile("tree.json", "utf-8");
-// const treeDataParsed: Node[] = JSON.parse(treeData);
-// findNodes(relevantIds, treeDataParsed);
-
-async function completionWithRetrievedNodes() {
-    const treeData = await fs.readFile("tree.json", "utf-8");
-    const treeDataParsed: Node[] = JSON.parse(treeData);
-    const relevantNodeIds = await retrieveRelevantNodes();
-
-    const foundNodesData = await findNodes(relevantNodeIds, treeDataParsed);
-    const query = "What are the main reasons fear of loss prevents investing?";
-
-    const completion = await openai.chat.completions.create({
-        model: "inclusionai/ling-2.6-flash:free",
-        messages: [
-            {
-                role: "system",
-                content: `You are an expert analyst. You have retrieved relevant knowledge nodes with their data based on a query. Analyze the data from these nodes to answer the query as best as possible.
-                QUERY: ${query} RETRIEVED_NODES_DATA: ${foundNodesData} Provide a concise and informative answer based on the retrieved data.`,
-            },
-        ],
-    });
-
-    console.log("Final Answer:", completion.choices?.[0]?.message?.content);
-}
-
-await completionWithRetrievedNodes();
