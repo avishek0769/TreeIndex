@@ -1,7 +1,8 @@
 import "dotenv/config";
 import OpenAI from "openai";
 import { sampleData } from "./sample_data.ts";
-import type Node from "./types.ts";
+import type { Node, FoundNodeData } from "./types.ts";
+import fs from "fs/promises";
 
 const openai = new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
@@ -170,7 +171,7 @@ async function generateKnowledgeTree(data: string, startSubset: number) {
         ],
     });
 
-    const raw = completion.choices?.[0]?.message?.content || '{"nodes":[]}';
+    let raw = completion.choices?.[0]?.message?.content || '{"nodes":[]}';
     let parsed;
     try {
         parsed = JSON.parse(raw);
@@ -196,6 +197,37 @@ async function generateKnowledgeTree(data: string, startSubset: number) {
     await generateKnowledgeTree(nextChunk, lastNode.stringSubset[1]);
 }
 
-await generateKnowledgeTree(sampleData, 0);
+// await generateKnowledgeTree(sampleData, 0);
+// await fs.writeFile("tree.json", JSON.stringify(tree))
 
-console.log(tree)
+async function retrieveRelevantNodes() {
+    const treeData = await fs.readFile("tree.json", "utf-8");
+    const query = "What are the main reasons fear of loss prevents investing?";
+
+    const completion = await openai.chat.completions.create({
+        model: "inclusionai/ling-2.6-flash:free",
+        messages: [
+            {
+                role: "system",
+                content: `You are an expert knowledge retriever. You have a hierarchical tree of knowledge nodes with titles, summaries, and string subsets. When given a query, you find the most relevant nodes based on their titles and summaries. You return a list of nodeIds that are most relevant to the query. Always return valid JSON in the format: {"relevantNodeIds": ["0015", "0023"]}`,
+            },
+            { role: "user", content: `QUERY: ${query} KNOWLEDGE_TREE: ${JSON.stringify(treeData)}` },
+        ],
+    });
+
+    let raw = completion.choices?.[0]?.message?.content || '{"relevantNodeIds":[]}';
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
+    } catch (err) {
+        console.log("Invalid JSON:", raw);
+        return;
+    }
+    const relevantNodeIds: string[] = parsed.relevantNodeIds || [];
+    console.log("Relevant Node IDs:", relevantNodeIds);
+}
+retrieveRelevantNodes();
+
+const relevantIds = ["0021", "0016", "0010"];
+
+
