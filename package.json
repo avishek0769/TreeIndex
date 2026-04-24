@@ -35,7 +35,8 @@
         "url": "https://github.com/avishek0769/treeindex/issues"
     },
     "dependencies": {
-        "openai": "^6.34.0"
+        "openai": "^6.34.0",
+        "treeindex": "file:treeindex-0.1.0.tgz"
     },
     "scripts": {
         "build": "tsc",

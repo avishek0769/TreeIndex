@@ -13,7 +13,7 @@ const BASE_URLS: Record<ProviderEnum, string> = {
     openrouter: "https://openrouter.ai/api/v1",
 };
 
-export class TreeIndex {
+class TreeIndex {
     private tree: Node[];
     private openai: OpenAI;
     private model: string;
@@ -69,11 +69,7 @@ export class TreeIndex {
         return max;
     }
 
-    async loadData(data: string) {
-        this.data = data;
-    }
-
-    async generateTree (chunkText: string, startSubset: number = 0): Promise<Node[]> {
+    private async generateTreeRecursive (chunkText: string, startSubset: number = 0): Promise<Node[]> {
         if (chunkText.length < 100) return this.tree;
 
         const completion = await this.openai.chat.completions.create({
@@ -110,8 +106,17 @@ export class TreeIndex {
         const nextStart = Math.max(0, maxCovered - 400);
         const nextChunk = this.data.slice(nextStart);
 
-        await this.generateTree(nextChunk, lastNode.stringSubset[1]);
+        await this.generateTreeRecursive(nextChunk, lastNode.stringSubset[1]);
         return this.tree;
+    }
+
+    async loadData(data: string) {
+        this.data = data;
+    }
+
+    async generateTree () {
+        const tree = await this.generateTreeRecursive(this.data, 0);
+        return tree;
     }
 
     async retrieveRelevantNodes(tree: Node[], query: string): Promise<string[]> {
