@@ -1,8 +1,6 @@
 import "dotenv/config";
 import OpenAI from "openai";
-import { sampleData } from "./sample_data.ts";
 import type { Node, ProviderEnum } from "./types.ts";
-import fs from "fs/promises";
 
 const SYSTEM_PROMPT = `
 You are an expert knowledge architect.
@@ -109,23 +107,24 @@ Required output shape only:
 }
 `;
 
-const BASE_URLs = {
-    openai: "https://openai.com/api",
-    gemini: "https://gemini.com/api",
-    anthropic: "https://anthropic.com/api",
-    grok: "https://grok.com/api",
-    ollama: "https://ollama.com/api",
-    openrouter: "https://openrouter.com/api",
-}
+const BASE_URLS = {
+    openai: "https://api.openai.com/v1",
+    gemini: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    anthropic: "https://api.anthropic.com/v1",
+    grok: "https://api.x.ai/v1",
+    ollama: "http://localhost:11434/v1",
+    openrouter: "https://openrouter.ai/api/v1",
+};
 
-class TreeIndex {
+export class TreeIndex {
     private tree: Node[] = [];
     private openai: OpenAI;
-    private model: string = "inclusionai/ling-2.6-flash:free";
+    private model: string;
 
-    constructor(provider: ProviderEnum) {
+    constructor(provider: ProviderEnum, model = "inclusionai/ling-2.6-flash:free") {
+        this.model = model;
         this.openai = new OpenAI({
-            baseURL: BASE_URLs[provider],
+            baseURL: BASE_URLS[provider],
             apiKey: process.env.TREEINDEX_API_KEY,
         });
     }
@@ -174,7 +173,7 @@ class TreeIndex {
         if (data.length < 100) return this.tree;
 
         const completion = await this.openai.chat.completions.create({
-            model: "inclusionai/ling-2.6-flash:free",
+            model: this.model,
             messages: [
                 { role: "system", content: SYSTEM_PROMPT },
                 {
@@ -205,15 +204,13 @@ class TreeIndex {
         if (maxCovered <= startSubset) return [];
 
         const nextStart = Math.max(0, maxCovered - 400);
-        const nextChunk = sampleData.slice(nextStart);
+        const nextChunk = data.slice(nextStart);
 
         await this.generateTree(nextChunk, lastNode.stringSubset[1]);
         return this.tree;
     }
 
-    async retrieveRelevantNodes(tree: Node[]): Promise<string[]> {
-        const query = "What are the main reasons fear of loss prevents investing?";
-
+    async retrieveRelevantNodes(tree: Node[], query: string): Promise<string[]> {
         const completion = await this.openai.chat.completions.create({
             model: this.model,
             messages: [
@@ -238,27 +235,26 @@ class TreeIndex {
         return relevantNodeIds;
     }
 
-    async findNodes(nodeIds: string[], nodes: Node[]): Promise<string> {
+    async findNodes(nodeIds: string[], nodes: Node[], sourceText: string): Promise<string> {
         let foundNodesData: string = "";
 
-        nodes.forEach((node) => {
+        for (const node of nodes) {
             if (nodeIds.includes(node.nodeId)) {
-                const data = sampleData.slice(node.stringSubset[0], node.stringSubset[1]);
+                const data = sourceText.slice(node.stringSubset[0], node.stringSubset[1]);
                 foundNodesData += data + "\n";
             }
             if (node.nodes?.length) {
-                this.findNodes(nodeIds, node.nodes);
+                foundNodesData += await this.findNodes(nodeIds, node.nodes, sourceText);
             }
-        });
+        }
 
         return foundNodesData;
     }
 
-    async completionWithRetrievedNodes(tree: Node[]): Promise<string> {
-        const relevantNodeIds = await this.retrieveRelevantNodes(tree);
+    async completion(tree: Node[], query: string, sourceText: string): Promise<string> {
+        const relevantNodeIds = await this.retrieveRelevantNodes(tree, query);
 
-        const foundNodesData = await this.findNodes(relevantNodeIds, tree);
-        const query = "What are the main reasons fear of loss prevents investing?";
+        const foundNodesData = await this.findNodes(relevantNodeIds, tree, sourceText);
 
         const completion = await this.openai.chat.completions.create({
             model: this.model,

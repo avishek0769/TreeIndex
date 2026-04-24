@@ -3,14 +3,13 @@ export interface Node {
     title: string;
     summary: string;
     stringSubset: [number, number];
-    nodes: Node[]
+    nodes: Node[];
 }
 
-export enum ProviderEnum {
-    OPENAI = "openai",
-    GEMINI = "gemini",
-    ANTHROPIC = "anthropic",
-    GROK = "grok",
-    OLLAMA = "ollama",
-    OPENROUTER = "openrouter"
-}
+export type ProviderEnum =
+    | "openai"
+    | "gemini"
+    | "anthropic"
+    | "grok"
+    | "ollama"
+    | "openrouter";
