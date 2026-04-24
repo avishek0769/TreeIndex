@@ -1,6 +1,6 @@
 import "dotenv/config";
 import OpenAI from "openai";
-import type { Node, ProviderEnum } from "./types";
+import type { Node, ProviderEnum } from "./dist/types";
 
 const SYSTEM_PROMPT = `
 You are an expert knowledge architect.
