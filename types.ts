@@ -5,10 +5,3 @@ export interface Node {
     stringSubset: [number, number];
     nodes: Node[]
 }
-
-export interface FoundNodeData {
-    nodeId: string;
-    title: string;
-    summary: string;
-    data: string;
-}

@@ -1,7 +1,7 @@
 import "dotenv/config";
 import OpenAI from "openai";
 import { sampleData } from "./sample_data.ts";
-import type { Node, FoundNodeData } from "./types.ts";
+import type { Node } from "./types.ts";
 import fs from "fs/promises";
 
 const openai = new OpenAI({
@@ -200,7 +200,7 @@ async function generateKnowledgeTree(data: string, startSubset: number) {
 // await generateKnowledgeTree(sampleData, 0);
 // await fs.writeFile("tree.json", JSON.stringify(tree))
 
-async function retrieveRelevantNodes() {
+async function retrieveRelevantNodes(): Promise<string[]> {
     const treeData = await fs.readFile("tree.json", "utf-8");
     const query = "What are the main reasons fear of loss prevents investing?";
 
@@ -211,7 +211,7 @@ async function retrieveRelevantNodes() {
                 role: "system",
                 content: `You are an expert knowledge retriever. You have a hierarchical tree of knowledge nodes with titles, summaries, and string subsets. When given a query, you find the most relevant nodes based on their titles and summaries. You return a list of nodeIds that are most relevant to the query. Always return valid JSON in the format: {"relevantNodeIds": ["0015", "0023"]}`,
             },
-            { role: "user", content: `QUERY: ${query} KNOWLEDGE_TREE: ${JSON.stringify(treeData)}` },
+            { role: "user", content: `QUERY: ${query} KNOWLEDGE_TREE: ${treeData}` },
         ],
     });
 
@@ -221,36 +221,56 @@ async function retrieveRelevantNodes() {
         parsed = JSON.parse(raw);
     } catch (err) {
         console.log("Invalid JSON:", raw);
-        return;
+        return [];
     }
     const relevantNodeIds: string[] = parsed.relevantNodeIds || [];
     console.log("Relevant Node IDs:", relevantNodeIds);
+    return relevantNodeIds;
 }
 // retrieveRelevantNodes();
 
 const relevantIds = ["0021", "0016", "0010"];
 
-async function findNodes(nodeIds: string[], nodes: Node[]) {
-    let foundNodesData: FoundNodeData[] = [];
+async function findNodes(nodeIds: string[], nodes: Node[]): Promise<string> {
+    let foundNodesData: string = "";
 
     nodes.forEach((node) => {
         if (nodeIds.includes(node.nodeId)) {
             const data = sampleData.slice(node.stringSubset[0], node.stringSubset[1]);
-            foundNodesData.push({
-                nodeId: node.nodeId,
-                title: node.title,
-                summary: node.summary,
-                data,
-            });
+            foundNodesData += data + "\n";
         }
         if (node.nodes?.length) {
             findNodes(nodeIds, node.nodes);
         }
     });
 
-    console.log("Found Nodes Data:", foundNodesData);
+    return foundNodesData;
 }
 
-let treeData: string = await fs.readFile("tree.json", "utf-8");
-const treeDataParsed: Node[] = JSON.parse(treeData);
-findNodes(relevantIds, treeDataParsed);
+// let treeData: string = await fs.readFile("tree.json", "utf-8");
+// const treeDataParsed: Node[] = JSON.parse(treeData);
+// findNodes(relevantIds, treeDataParsed);
+
+async function completionWithRetrievedNodes() {
+    const treeData = await fs.readFile("tree.json", "utf-8");
+    const treeDataParsed: Node[] = JSON.parse(treeData);
+    const relevantNodeIds = await retrieveRelevantNodes();
+
+    const foundNodesData = await findNodes(relevantNodeIds, treeDataParsed);
+    const query = "What are the main reasons fear of loss prevents investing?";
+
+    const completion = await openai.chat.completions.create({
+        model: "inclusionai/ling-2.6-flash:free",
+        messages: [
+            {
+                role: "system",
+                content: `You are an expert analyst. You have retrieved relevant knowledge nodes with their data based on a query. Analyze the data from these nodes to answer the query as best as possible.
+                QUERY: ${query} RETRIEVED_NODES_DATA: ${foundNodesData} Provide a concise and informative answer based on the retrieved data.`,
+            },
+        ],
+    });
+
+    console.log("Final Answer:", completion.choices?.[0]?.message?.content);
+}
+
+await completionWithRetrievedNodes();
