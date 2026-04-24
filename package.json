@@ -1,31 +1,29 @@
 {
     "name": "treeindex",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "description": "Vectorless semantic indexing SDK that converts large text into searchable knowledge trees.",
     "type": "module",
     "main": "./dist/index.js",
-    "types": "./dist/types.d.ts",
+    "types": "./dist/index.d.ts",
     "exports": {
         ".": {
-            "import": "./dist/index.ts",
-            "types": "./dist/types.d.ts"
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
         }
     },
     "files": [
         "dist",
-        "README.md"
+        "README.md",
+        "LICENSE"
     ],
     "keywords": [
         "rag",
         "vectorless",
-        "search",
-        "knowledge-tree",
         "semantic-search",
+        "knowledge-tree",
         "llm",
-        "retrieval",
-        "ai"
+        "retrieval"
     ],
-    "packageManager": "npm@11.13.0",
     "author": "Avishek",
     "license": "MIT",
     "repository": {
@@ -37,11 +35,7 @@
         "url": "https://github.com/avishek0769/treeindex/issues"
     },
     "dependencies": {
-        "dotenv": "^17.4.2",
         "openai": "^6.34.0"
-    },
-    "devDependencies": {
-        "@types/node": "^25.6.0"
     },
     "scripts": {
         "build": "tsc",

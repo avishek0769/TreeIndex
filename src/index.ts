@@ -1,7 +1,8 @@
-import "dotenv/config";
 import OpenAI from "openai";
-import type { Node, ProviderEnum } from "./types";
-import { SYSTEM_PROMPT } from "./prompt";
+import type { Node, ProviderEnum } from "./types.js";
+import { SYSTEM_PROMPT } from "./prompt.js";
+
+export type { Node, ProviderEnum } from "./types.js";
 
 const BASE_URLS: Record<ProviderEnum, string> = {
     openai: "https://api.openai.com/v1",
@@ -174,3 +175,5 @@ export class TreeIndex {
         return answer;
     }
 }
+
+export default TreeIndex;

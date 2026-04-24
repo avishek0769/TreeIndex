@@ -5,4 +5,11 @@ export interface Node {
     stringSubset: [number, number];
     nodes: Node[];
 }
-export type ProviderEnum = "openai" | "gemini" | "anthropic" | "grok" | "ollama" | "openrouter";
+
+export type ProviderEnum =
+    | "openai"
+    | "gemini"
+    | "anthropic"
+    | "grok"
+    | "ollama"
+    | "openrouter";
