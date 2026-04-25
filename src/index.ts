@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import type { ConstructorParams, FoundNode, Node, ProviderEnum } from "./types.js";
 import { COMPLETION_SYSTEM_PROMPT, RETRIEVAL_SYSTEM_PROMPT, SYSTEM_PROMPT } from "./prompt.js";
+import fs from "fs/promises";
 
 export type { Node, ProviderEnum } from "./types.js";
 
@@ -113,24 +114,32 @@ class TreeIndex {
         return this.tree;
     }
 
-    async loadData(data: string) {
+    loadData(data: string) {
         if (!data || data.length === 0) {
             throw new Error("Data cannot be empty");
         }
         this.data = data;
     }
 
+    loadTree(tree: Node[]) {
+        if (!tree || tree.length === 0) {
+            throw new Error("Tree cannot be empty");
+        }
+        this.tree = tree;
+    }
+
     async generateTree() {
-        if (!this.data) {
-            throw new Error("Data not loaded. Please load data using loadData() before generating tree.");
+        if (!this.data || this.data.length === 0) {
+            throw new Error("Data cannot be empty");
         }
         const tree = await this.generateTreeRecursive(this.data, 0);
+
         return tree;
     }
 
     async retrieveRelevantNodes(query: string): Promise<string[]> {
         if (!this.tree || this.tree.length === 0) {
-            throw new Error("Knowledge tree is empty. Please generate the tree before retrieval.");
+            throw new Error("Knowledge tree is empty. Please generate and load a tree before retrieval.");
         }
         if (query.trim().length === 0) {
             throw new Error("Invalid query.");
@@ -162,16 +171,18 @@ class TreeIndex {
 
     findNodes(nodeIds: string[]): FoundNode[] {
         if (!this.tree || this.tree.length === 0) {
-            throw new Error("Knowledge tree is empty. Please generate the tree before finding nodes.");
+            throw new Error("Knowledge tree is empty. Please generate and load a tree before finding nodes.");
         }
         if (nodeIds.length === 0) {
             throw new Error("No node IDs provided for finding nodes.");
         }
-        
+
         return this.findNodesRecursive(this.tree, nodeIds);
     }
 
     private findNodesRecursive(tree: Node[], nodeIds: string[], found: FoundNode[] = []): FoundNode[] {
+        if(found.length >= nodeIds.length) return found;
+
         for (const node of tree) {
             if (nodeIds.includes(node.nodeId)) {
                 const data = this.data.slice(node.stringSubset[0], node.stringSubset[1]);
@@ -204,9 +215,8 @@ class TreeIndex {
                 {
                     role: "user",
                     content: `
-                        QUERY: ${query}\n
-                        RETRIEVED_NODES_DATA: ${foundNodesData}\n
-                        Provide a concise and informative answer based on the retrieved data.
+                        USER_QUERY: ${query}\n
+                        RETRIEVED_DATA: ${foundNodesData}\n
                     `,
                 },
             ],
@@ -217,4 +227,4 @@ class TreeIndex {
     }
 }
 
-export default TreeIndex;
+export { TreeIndex };
