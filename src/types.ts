@@ -6,10 +6,9 @@ export interface Node {
     nodes: Node[];
 }
 
-export type ProviderEnum =
-    | "openai"
-    | "gemini"
-    | "anthropic"
-    | "grok"
-    | "ollama"
-    | "openrouter";
+export type ProviderEnum = "openai" | "gemini" | "anthropic" | "grok" | "ollama" | "openrouter";
+
+export interface ConstructorParams {
+    provider: ProviderEnum;
+    apiKey: string;
+}

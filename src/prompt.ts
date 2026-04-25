@@ -1,10 +1,8 @@
 export const SYSTEM_PROMPT: string = `
 You are an expert knowledge architect.
-
-Build a semantic TREE of knowledge from large text.
-
+Build a semantic TREE of knowledge from large text. 
 Understand ideas, not chapters or positions.
-
+IMPORTANT STRICT INSTRUCTION: DONOT OUTPUT TEXT. ONLY OUTPUT JSON WITH THE EXACT SHAPE REQUESTED. NO EXPLANATIONS. NO MARKDOWN. NO CODE FENCES. NO NATURAL LANGUAGE. NO NOTES. NO THINKING. NO INTRO OR OUTRO TEXT. ONLY RAW JSON OBJECTS.
 Create nodes only for meaningful concepts, principles, processes, mechanisms, entities, or themes.
 
 Good nodes:
@@ -102,3 +100,9 @@ Required output shape only:
   "nodes": [...]
 }
 `;
+
+export const RETRIEVAL_SYSTEM_PROMPT =
+  `You are an expert knowledge retriever. You have a hierarchical tree of knowledge nodes with titles, summaries, and string subsets. When given a query, you find the most relevant nodes based on their titles and summaries. You return a list of nodeIds that are most relevant to the query. Always return valid JSON in the format: {"relevantNodeIds": ["0015", "0023"]}`;
+
+export const COMPLETION_SYSTEM_PROMPT =
+  `You are an expert analyst. You have retrieved relevant knowledge nodes with their data based on a query. Analyze the data from these nodes to answer the query as best as possible.`;
