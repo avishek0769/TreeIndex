@@ -1,36 +1,21 @@
 import OpenAI from "openai";
-import type { ConstructorParams, FoundNode, Node, ProviderEnum } from "./types.js";
+import type { ConstructorParams, FoundNode, TreeNode } from "./types.js";
 import { COMPLETION_SYSTEM_PROMPT, RETRIEVAL_SYSTEM_PROMPT, SYSTEM_PROMPT } from "./prompt.js";
-import fs from "fs/promises";
-
-export type { Node, ProviderEnum } from "./types.js";
-
-const BASE_URLS: Record<ProviderEnum, string> = {
-    openai: "https://api.openai.com/v1",
-    gemini: "https://generativelanguage.googleapis.com/v1beta/openai/",
-    anthropic: "https://api.anthropic.com/v1",
-    grok: "https://api.x.ai/v1",
-    ollama: "http://localhost:11434/v1",
-    openrouter: "https://openrouter.ai/api/v1",
-};
 
 class TreeIndex {
-    private tree: Node[];
+    private tree: TreeNode[];
     private openai: OpenAI;
     private model: string;
     private data: string;
 
-    constructor({ provider, apiKey }: ConstructorParams) {
+    constructor({ baseURL, apiKey, model }: ConstructorParams) {
         this.tree = [];
-        this.model = "inclusionai/ling-2.6-flash:free";
+        this.model = model;
         this.data = "";
-        this.openai = new OpenAI({
-            baseURL: BASE_URLS[provider],
-            apiKey,
-        });
+        this.openai = new OpenAI({ baseURL, apiKey: apiKey });
     }
 
-    private mergeNodes(target: Node[], incoming: Node[]) {
+    private mergeNodes(target: TreeNode[], incoming: TreeNode[]) {
         for (const node of incoming) {
             const existing = target.find((n) => n.title === node.title);
 
@@ -53,7 +38,7 @@ class TreeIndex {
         }
     }
 
-    private getMaxCoveredIndex(tree: Node[]): number {
+    private getMaxCoveredIndex(tree: TreeNode[]): number {
         let max = 0;
 
         for (const node of tree) {
@@ -70,7 +55,7 @@ class TreeIndex {
         return max;
     }
 
-    private async generateTreeRecursive(chunkText: string, startSubset: number = 0): Promise<Node[]> {
+    private async generateTreeRecursive(chunkText: string, startSubset: number = 0): Promise<TreeNode[]> {
         if (chunkText.length < 100) return this.tree;
 
         const completion = await this.openai.chat.completions.create({
@@ -96,7 +81,7 @@ class TreeIndex {
             console.log("Invalid JSON:", raw);
             return [];
         }
-        const newNodes: Node[] = parsed.nodes || [];
+        const newNodes: TreeNode[] = parsed.nodes || [];
 
         if (!newNodes.length) return [];
 
@@ -121,7 +106,7 @@ class TreeIndex {
         this.data = data;
     }
 
-    loadTree(tree: Node[]) {
+    loadTree(tree: TreeNode[]) {
         if (!tree || tree.length === 0) {
             throw new Error("Tree cannot be empty");
         }
@@ -180,7 +165,7 @@ class TreeIndex {
         return this.findNodesRecursive(this.tree, nodeIds);
     }
 
-    private findNodesRecursive(tree: Node[], nodeIds: string[], found: FoundNode[] = []): FoundNode[] {
+    private findNodesRecursive(tree: TreeNode[], nodeIds: string[], found: FoundNode[] = []): FoundNode[] {
         if(found.length >= nodeIds.length) return found;
 
         for (const node of tree) {
@@ -196,7 +181,7 @@ class TreeIndex {
         return found;
     }
 
-    async completion(query: string): Promise<string> {
+    async generateAnswer(query: string): Promise<string> {
         const relevantNodeIds = await this.retrieveRelevantNodes(query);
 
         const foundNodes = this.findNodes(relevantNodeIds);

@@ -1,16 +1,15 @@
-export interface Node {
+export interface TreeNode {
     nodeId: string;
     title: string;
     summary: string;
     stringSubset: [number, number];
-    nodes: Node[];
+    nodes: TreeNode[];
 }
 
-export type ProviderEnum = "openai" | "gemini" | "anthropic" | "grok" | "ollama" | "openrouter";
-
 export interface ConstructorParams {
-    provider: ProviderEnum;
+    baseURL: string;
     apiKey: string;
+    model: string;
 }
 
 export interface FoundNode {

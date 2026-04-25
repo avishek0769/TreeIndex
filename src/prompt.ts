@@ -58,7 +58,7 @@ Rules:
 6. stringSubset must be absolute indices.
 7. If nothing valuable is new, return {"nodes":[]}
 
-Node format:
+TreeNode format:
 {
   "nodeId": "0015",
   "title": "Fear of Loss",
