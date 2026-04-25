@@ -1,4 +1,5 @@
 # TreeIndex
+
 TreeIndex is a vectorless semantic indexing SDK that converts large text into searchable knowledge trees.
 
 It is inspired by [PageIndex](https://docs.pageindex.ai/), with a simple npm-first developer workflow and bring-your-own-LLM setup.
@@ -25,9 +26,9 @@ npm install treeindex
 import { TreeIndex } from "treeindex";
 
 const treeIndex = new TreeIndex({
-	baseURL: "https://api.openai.com/v1",
-	apiKey: process.env.OPENAI_API_KEY,
-	model: "gpt-5.1",
+    baseURL: "https://api.openai.com/v1",
+    apiKey: process.env.OPENAI_API_KEY,
+    model: "gpt-5.1",
 });
 ```
 
@@ -84,8 +85,8 @@ const context = foundNodes.map((n) => n.data).join("\n");
 
 // Your own generation call (any model/provider)
 const answer = await myCustomGenerator({
-  query: "What are assets vs liabilities?",
-  context,
+    query: "What are assets vs liabilities?",
+    context,
 });
 
 console.log(answer);
@@ -111,14 +112,14 @@ TreeIndex focuses on a simpler developer experience:
 
 TreeIndex works with OpenAI-compatible chat endpoints by supplying the provider base URL and model.
 
-| Provider | Typical baseURL |
-|---|---|
-| OpenAI | `https://api.openai.com/v1` |
-| Gemini | `https://generativelanguage.googleapis.com/v1beta/openai/` |
-| Anthropic | `https://api.anthropic.com/v1` |
-| Grok (xAI) | `https://api.x.ai/v1` |
-| Ollama | `http://localhost:11434/v1` |
-| OpenRouter | `https://openrouter.ai/api/v1` |
+| Provider   | Typical baseURL                                            |
+| ---------- | ---------------------------------------------------------- |
+| OpenAI     | `https://api.openai.com/v1`                                |
+| Gemini     | `https://generativelanguage.googleapis.com/v1beta/openai/` |
+| Anthropic  | `https://api.anthropic.com/v1`                             |
+| Grok (xAI) | `https://api.x.ai/v1`                                      |
+| Ollama     | `http://localhost:11434/v1`                                |
+| OpenRouter | `https://openrouter.ai/api/v1`                             |
 
 ## API Reference
 
@@ -126,37 +127,44 @@ TreeIndex works with OpenAI-compatible chat endpoints by supplying the provider 
 
 ```ts
 type TreeIndexOptions = {
-	baseURL: string;
-	apiKey: string;
-	model: string;
+    baseURL: string;
+    apiKey: string;
+    model: string;
 };
 ```
 
 Creates a TreeIndex instance backed by your chosen provider/model.
 
 ### `loadData(data: string): void`
+
 Loads source text to index.
 
 ### `generateTree(): Promise<TreeNode[]>`
+
 Builds or extends the semantic knowledge tree from loaded data.
+
 ```ts
 type TreeNode = {
     nodeId: string;
-	title: string;
-	summary: string;
-	stringSubset: [number, number];
-	nodes: TreeNode[];
+    title: string;
+    summary: string;
+    stringSubset: [number, number];
+    nodes: TreeNode[];
 };
 ```
 
 ### `loadTree(tree: TreeNode[]): void`
+
 Loads an existing tree (for reuse or persisted state).
 
 ### `retrieveRelevantNodes(query: string): Promise<string[]>`
+
 Returns node IDs that are semantically relevant to the query.
 
 ### `findNodes(nodeIds: string[]): FoundNode[]`
+
 Returns matched nodes with extracted source snippets.
+
 ```ts
 type FoundNode = {
     nodeId: string;
@@ -167,8 +175,8 @@ type FoundNode = {
 ```
 
 ### `generateAnswer(query: string): Promise<string>`
-Generates an answer grounded in retrieved node data.
 
+Generates an answer grounded in retrieved node data.
 
 ## Why Vectorless?
 
