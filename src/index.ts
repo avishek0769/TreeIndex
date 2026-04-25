@@ -210,7 +210,6 @@ class TreeIndex {
                     `,
                 },
             ],
-            response_format: { type: "json_object" },
         });
 
         const answer = completion.choices?.[0]?.message?.content || "No answer generated.";
