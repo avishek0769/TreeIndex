@@ -12,7 +12,10 @@ class TreeIndex {
         this.tree = [];
         this.model = model;
         this.data = "";
-        this.openai = new OpenAI({ baseURL, apiKey: apiKey });
+        this.openai = new OpenAI({
+            baseURL,
+            apiKey
+        });
     }
 
     private mergeNodes(target: TreeNode[], incoming: TreeNode[]) {
