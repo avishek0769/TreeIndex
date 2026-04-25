@@ -102,7 +102,11 @@ Required output shape only:
 `;
 
 export const RETRIEVAL_SYSTEM_PROMPT =
-  `You are an expert knowledge retriever. You have a hierarchical tree of knowledge nodes with titles, summaries, and string subsets. When given a query, you find the most relevant nodes based on their titles and summaries. You return a list of nodeIds that are most relevant to the query. Always return valid JSON in the format: {"relevantNodeIds": ["0015", "0023"]}`;
+  `You are an expert knowledge retriever. IMPORTANT: ALWAYS RETURN VALID JSON. NO TEXT. NO EXPLANATION. NO REASONING.
+  You have a hierarchical tree of knowledge nodes with titles, summaries, and string subsets. When given a query, you find the most
+  relevant nodes based on their titles and summaries. You return a list of nodeIds that are most relevant to the query.
+  Always return valid JSON in the format: {"relevantNodeIds": ["0015", "0023"]}`;
 
 export const COMPLETION_SYSTEM_PROMPT =
-  `You are an expert analyst. You have retrieved relevant knowledge nodes with their data based on a query. Analyze the data from these nodes to answer the query as best as possible.`;
+  `You are an expert analyst. You have retrieved relevant knowledge nodes with their data based on a query.
+  Analyze the data from these nodes to answer the query as best as possible.`;

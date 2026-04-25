@@ -12,3 +12,10 @@ export interface ConstructorParams {
     provider: ProviderEnum;
     apiKey: string;
 }
+
+export interface FoundNode {
+    nodeId: string;
+    title: string;
+    summary: string;
+    data: string;
+}

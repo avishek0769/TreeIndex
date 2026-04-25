@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import type { ConstructorParams, Node, ProviderEnum } from "./types.js";
+import type { ConstructorParams, FoundNode, Node, ProviderEnum } from "./types.js";
 import { COMPLETION_SYSTEM_PROMPT, RETRIEVAL_SYSTEM_PROMPT, SYSTEM_PROMPT } from "./prompt.js";
 
 export type { Node, ProviderEnum } from "./types.js";
@@ -114,15 +114,28 @@ class TreeIndex {
     }
 
     async loadData(data: string) {
+        if (!data || data.length === 0) {
+            throw new Error("Data cannot be empty");
+        }
         this.data = data;
     }
 
     async generateTree() {
+        if (!this.data) {
+            throw new Error("Data not loaded. Please load data using loadData() before generating tree.");
+        }
         const tree = await this.generateTreeRecursive(this.data, 0);
         return tree;
     }
 
-    async retrieveRelevantNodes(tree: Node[], query: string): Promise<string[]> {
+    async retrieveRelevantNodes(query: string): Promise<string[]> {
+        if (!this.tree || this.tree.length === 0) {
+            throw new Error("Knowledge tree is empty. Please generate the tree before retrieval.");
+        }
+        if (query.trim().length === 0) {
+            throw new Error("Invalid query.");
+        }
+
         const completion = await this.openai.chat.completions.create({
             model: this.model,
             messages: [
@@ -130,8 +143,9 @@ class TreeIndex {
                     role: "system",
                     content: RETRIEVAL_SYSTEM_PROMPT,
                 },
-                { role: "user", content: `QUERY: ${query} KNOWLEDGE_TREE: ${JSON.stringify(tree)}` },
+                { role: "user", content: `QUERY: ${query} KNOWLEDGE_TREE: ${JSON.stringify(this.tree)}` },
             ],
+            response_format: { type: "json_object" },
         });
 
         let raw = completion.choices?.[0]?.message?.content || `{"relevantNodeIds":[]}`;
@@ -146,26 +160,39 @@ class TreeIndex {
         return relevantNodeIds;
     }
 
-    findNodes(nodeIds: string[], nodes: Node[]): string {
-        let foundNodesData: string = "";
+    findNodes(nodeIds: string[]): FoundNode[] {
+        if (!this.tree || this.tree.length === 0) {
+            throw new Error("Knowledge tree is empty. Please generate the tree before finding nodes.");
+        }
+        if (nodeIds.length === 0) {
+            throw new Error("No node IDs provided for finding nodes.");
+        }
+        
+        return this.findNodesRecursive(this.tree, nodeIds);
+    }
 
-        for (const node of nodes) {
+    private findNodesRecursive(tree: Node[], nodeIds: string[], found: FoundNode[] = []): FoundNode[] {
+        for (const node of tree) {
             if (nodeIds.includes(node.nodeId)) {
                 const data = this.data.slice(node.stringSubset[0], node.stringSubset[1]);
-                foundNodesData += data + "\n";
+                found.push({ ...node, data });
             }
             if (node.nodes?.length) {
-                foundNodesData += this.findNodes(nodeIds, node.nodes);
+                this.findNodesRecursive(node.nodes, nodeIds, found);
             }
         }
 
-        return foundNodesData;
+        return found;
     }
 
-    async completion(tree: Node[], query: string): Promise<string> {
-        const relevantNodeIds = await this.retrieveRelevantNodes(tree, query);
+    async completion(query: string): Promise<string> {
+        const relevantNodeIds = await this.retrieveRelevantNodes(query);
 
-        const foundNodesData = this.findNodes(relevantNodeIds, tree);
+        const foundNodes = this.findNodes(relevantNodeIds);
+        const foundNodesData = foundNodes.reduce((acc, node) => {
+            acc += node.data + "\n";
+            return acc;
+        }, "");
 
         const completion = await this.openai.chat.completions.create({
             model: this.model,
@@ -176,7 +203,11 @@ class TreeIndex {
                 },
                 {
                     role: "user",
-                    content: `QUERY: ${query}\nRETRIEVED_NODES_DATA: ${foundNodesData}\nProvide a concise and informative answer based on the retrieved data.`,
+                    content: `
+                        QUERY: ${query}\n
+                        RETRIEVED_NODES_DATA: ${foundNodesData}\n
+                        Provide a concise and informative answer based on the retrieved data.
+                    `,
                 },
             ],
             response_format: { type: "json_object" },
