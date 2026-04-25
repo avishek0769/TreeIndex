@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import type { ConstructorParams, FoundNode, TreeNode } from "./types.js";
+import type { TreeIndexOptions, FoundNode, TreeNode } from "./types.js";
 import { COMPLETION_SYSTEM_PROMPT, RETRIEVAL_SYSTEM_PROMPT, SYSTEM_PROMPT } from "./prompt.js";
 
 class TreeIndex {
@@ -8,7 +8,7 @@ class TreeIndex {
     private model: string;
     private data: string;
 
-    constructor({ baseURL, apiKey, model }: ConstructorParams) {
+    constructor({ baseURL, apiKey, model }: TreeIndexOptions) {
         this.tree = [];
         this.model = model;
         this.data = "";

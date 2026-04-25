@@ -6,7 +6,7 @@ export interface TreeNode {
     nodes: TreeNode[];
 }
 
-export interface ConstructorParams {
+export interface TreeIndexOptions {
     baseURL: string;
     apiKey: string;
     model: string;
